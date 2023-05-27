@@ -77,7 +77,7 @@ app.get('/user/:username', (req, res) => {
         if(err){
             console.error(err)
             console.log('Error')
-        } 
+        }
         else{
             return res.json(result)
         }
@@ -95,6 +95,19 @@ app.get('/login/:username/:password', (req, res) => {
                 return res.json(result)
         }
     })
+})
+
+app.get('/getUsers', (req, res) => {
+  db.all('SELECT * FROM users', (err, result) => {
+    if(err){
+      console.error(err)
+      console.log('Error')
+    } 
+    else{
+      console.log(result)
+        return res.json(result)
+    }
+  })
 })
 
 app.post('/sendPhoto', upload.single('files'),  function async (req, res) {
