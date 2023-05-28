@@ -177,7 +177,6 @@ app.get('/users', (req, res) => {
   })
 } )
 app.get('/getMessages/:userFrom/:userTo', (req, res) => {
-  var arr = [];
   const {userFrom, userTo} = req.params
   db.all('SELECT * FROM Messages WHERE userFrom = ? AND userTo = ?', [userFrom, userTo], (err, rows) => {
     if(err){
@@ -188,6 +187,18 @@ app.get('/getMessages/:userFrom/:userTo', (req, res) => {
       return res.json(rows)
     }
   })
+})
+
+app.get('/getPosts', (req, res) => {
+  db.all('SELECT * FROM posts', (err, rows) => {
+    if(err){
+      console.error("Error: " + err)
+    }else if (!rows) {
+      res.status(404).send('Messages not found');
+    } else {
+      return res.json(rows)
+    }
+  } )
 })
 
 
@@ -208,7 +219,7 @@ io.on('connect', (socket) => {
   socket.on('message', (data) => {
     const {message, userFrom, userTo} = data
     let sql = `INSERT INTO Messages (message, userFrom, userTo, date) VALUES (?,?,?,?)`
-    let params = [message, userFrom, userTo, Date()]
+    let params = [message, userFrom, userTo, Date('now')]
     db.run(sql, params, (err, result) => {
       if(err){
         console.error(err)
@@ -218,6 +229,18 @@ io.on('connect', (socket) => {
       }
     })
   });
+  // socket.on('inChat', (data) => {
+  //   const {userFrom, userTo} = data
+  //   let sql = `SELECT * FROM Messages WHERE (userFrom = '${userFrom}' AND userTo = '${userTo}') OR (userFrom = '${userTo}' AND userTo = '${userFrom}') `
+  //   db.all(sql, (err, result) => {
+  //     if(err){
+  //       console.error(err)
+  //     }
+  //     else{
+  //       socket.emit(result)
+  //     }
+  //   })
+  // })
 });
 
 io.listen(5500, () => {
