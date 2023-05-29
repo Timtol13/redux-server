@@ -11,60 +11,62 @@ const port = 7653
 
 
 const storage = multer.diskStorage({
-    destination: function (req, file, cb) {
-      const dir = './images';
+  destination: function (req, file, cb) {
+    const dir = './images';
       fs.mkdirSync(dir, { recursive: true });
       cb(null, dir);
     },
     filename: function (req, file, cb) {
       cb(null, file.originalname);
     }
-});
-
-const upload = multer({ storage: storage });
-
-const db = new TransactionDatabase(new sqlite3.Database('reduxDB'))
-
-const createUser = (login, password, name, surname, description) => {
+  });
+  
+  const upload = multer({ storage: storage });
+  
+  const db = new TransactionDatabase(new sqlite3.Database('reduxDB'))
+  
+  const createUser = (login, password, name, surname, description) => {
     db.run(`INSERT INTO users (login, password, Username, Surname, description) VALUES (?, ?, ?, ?, ?)`, [login, password, name, surname, description], function(err) {
-        if (err) {
-          console.error(err);
-          console.log('Error saving user to database')
-        } else {
-          console.log(`User with ID ${this.lastID} saved to database`)
-        }
+      if (err) {
+        console.error(err);
+        console.log('Error saving user to database')
+      } else {
+        console.log(`User with ID ${this.lastID} saved to database`)
+      }
     })
-}
-
-const getAll = () => {
+  }
+  
+  const getAll = () => {
     db.run(`SELECT * FROM users`, function(err, res){
-        if(err){
+      if(err){
             console.log(err)
         } else {console.log(res); return res}
     })
-}
-
-const findUser = (username) => {
+  }
+  
+  const findUser = (username) => {
     db.get(`SELECT login, password FROM users WHERE login = '${username}'`, function(err, result){
-        if(err){
-            console.error(err)
-            console.log('Error')
-        } 
-        else{
-            user = result
-        }
+      if(err){
+        console.error(err)
+        console.log('Error')
+      } 
+      else{
+        user = result
+      }
     })
-}
-
-const app = express()
-
-app.use(bodyParser.json());
-app.use(
+  }
+  
+  const app = express()
+  
+  app.use(bodyParser.json());
+  app.use(
     express.urlencoded(),
     cors({
-        origin: 'http://localhost:3000'
+      origin: 'http://localhost:3000'
     })
-)
+    )
+app.use('/images/posts', express.static(path.join(__dirname, 'images/posts')));
+app.use('/images/', express.static(path.join(__dirname, 'images/')));
 
 
 app.post('/registration', (req, res) => {
@@ -154,17 +156,23 @@ app.get('/getPhoto/:login', (req, res) => {
       res.status(404).send('Photo not found');
     } else {
       const filename = row.filename;
-      const filepath = `images/${login}/` + filename;
-      fs.readFile(filepath, (err, data) => {
-        if (err) {
-          console.error(err.message);
-          res.status(500).send('Server Error');
-        } else {
-          res.setHeader('Content-Type', 'image/*');
-          res.send(data);
-        }
-      });
+      res.json(filename)
     }
+  });
+})
+app.get('/getPhotoes/:login', (req, res) => {
+    const {login} = req.params
+    db.all('SELECT * FROM userPhoto WHERE login = ?', [login], (err, row) => {
+      if (err) {
+        console.error(err.message);
+        res.status(500).send('Server Error');
+      } else if (!row) {
+        res.status(404).send('Photo not found');
+      } else {
+        const filename = row;
+        console.log(filename)
+        res.json(filename)
+      }
   });
 })
 app.get('/users', (req, res) => {
@@ -190,7 +198,6 @@ app.get('/getMessages/:userFrom/:userTo', (req, res) => {
   })
 })
 
-app.use('/images/posts', express.static(path.join(__dirname, 'images/posts')));
 
 app.get('/getPosts', (req, res) => {
   db.all('SELECT * FROM posts', (err, row) => {
