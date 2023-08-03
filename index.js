@@ -1,6 +1,5 @@
 const express = require('express')
 const bodyParser = require('body-parser')
-const ws = require('ws')
 var fs = require('fs')
 const path = require('path')
 const multer  = require('multer')
@@ -105,8 +104,7 @@ app.get('/getUsers', (req, res) => {
       console.log('Error')
     } 
     else{
-      console.log(result)
-        return res.json(result)
+      return res.json(result)
     }
   })
 })
@@ -153,17 +151,20 @@ app.get('/getPhoto/:login', (req, res) => {
     } else if (!row) {
       res.status(404).send('Photo not found');
     } else {
-      const filename = row.filename;
-      const filepath = `images/${login}/` + filename;
-      fs.readFile(filepath, (err, data) => {
-        if (err) {
-          console.error(err.message);
-          res.status(500).send('Server Error');
-        } else {
-          res.setHeader('Content-Type', 'image/*');
-          res.send(data);
-        }
-      });
+      res.send(row)
+    }
+  });
+})
+app.get('/images/:login/:file', (req, res) => {
+  const {login, file} = req.params;
+  const filepath = `images/${login}/` + file;
+  fs.readFile(filepath, (err, data) => {
+    if (err) {
+      console.error(err.message);
+      res.status(500).send('Server Error');
+    } else {
+      res.setHeader('Content-Type', 'image/*');
+      res.send(data);
     }
   });
 })
@@ -191,6 +192,7 @@ app.get('/getMessages/:userFrom/:userTo', (req, res) => {
 })
 
 app.use('/images/posts', express.static(path.join(__dirname, 'images/posts')));
+app.use('/images/:login', express.static(path.join(__dirname, 'images')));
 
 app.get('/getPosts', (req, res) => {
   db.all('SELECT * FROM posts', (err, row) => {
@@ -287,34 +289,44 @@ const io = require("socket.io")({
 });
 
 
-io.on('connect', (socket) => {
-  console.log('A user connected');
-
+io.on('connection', (socket) => {
+  socket.join()
   socket.on('message', (data) => {
-    const {message, userFrom, userTo} = data
-    let sql = `INSERT INTO Messages (message, userFrom, userTo, date) VALUES (?,?,?,?)`
-    let params = [message, userFrom, userTo, Date('now')]
-    db.run(sql, params, (err, result) => {
-      if(err){
-        console.error(err)
+    const { message, userFrom, userTo } = data;
+    const currentDate = new Date().toISOString();
+    const sql = `INSERT INTO Messages (message, userFrom, userTo, date) VALUES (?, ?, ?, ?)`;
+    const params = [message, userFrom, userTo, currentDate];
+  
+    db.run(sql, params, (err) => {
+      if (err) {
+        console.error("Ошибка при добавлении сообщения:", err);
+      } else {
+        console.log("Сообщение успешно добавлено в базу данных");
+  
+        io.to(userTo).emit('newMessage', { message, userFrom, userTo, date: currentDate });
       }
-      else{
-        console.log(result)
-      }
-    })
+    });
   });
-  // socket.on('inChat', (data) => {
-  //   const {userFrom, userTo} = data
-  //   let sql = `SELECT * FROM Messages WHERE (userFrom = '${userFrom}' AND userTo = '${userTo}') OR (userFrom = '${userTo}' AND userTo = '${userFrom}') `
-  //   db.all(sql, (err, result) => {
-  //     if(err){
-  //       console.error(err)
-  //     }
-  //     else{
-  //       socket.emit(result)
-  //     }
-  //   })
-  // })
+  socket.on('connectToChat', (room) => {
+    socket.join(room); 
+    console.log('user ' + room)
+    io.to(room).emit('connectToChat', room);
+  });
+
+  socket.on('inChat', (data)=>{
+     const { userFrom, userTo } = data;
+    const sql = `SELECT * FROM Messages WHERE (userFrom = ? AND userTo = ?) OR (userFrom = ? AND userTo = ?)`;
+    const params = [userFrom, userTo, userTo, userFrom];
+
+    db.all(sql, params, (err, result) => {
+      if (err) {
+        console.error('Error fetching messages:', err.message);
+      } else {
+        io.to(socket.id).emit('inChat', result);
+      }
+    });
+  })
+
 });
 
 io.listen(5500, () => {
@@ -324,5 +336,28 @@ io.listen(5500, () => {
 
 //_________________________________________________
 
+
+//__________________Check Online________________
+app.post('/setOnline/:login', (req, res) => {
+  const {login} = req.params
+  db.run(`UPDATE users SET status = 'online' WHERE login = '${login}'`, (err, row) => {
+    if(err){
+      console.log(err)
+    }else {
+      res.send(row)
+    }
+  })
+})
+app.post('/setOffline/:login', (req, res) => {
+  const {login} = req.params
+  db.run(`UPDATE users SET status = 'offline' WHERE login = '${login}'`, (err, row) => {
+    if(err){
+      console.log(err)
+    }else {
+      res.send(row)
+    }
+  })
+})
+//______________________________________________
 
 app.listen(port, () => console.log(`Listening on port ${port}!`))
