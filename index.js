@@ -191,6 +191,20 @@ app.get('/getMessages/:userFrom/:userTo', (req, res) => {
   })
 })
 
+app.get('/images/messages/:userFrom/:userTo/:filename', (req, res) => {
+  const {userFrom, userTo, filename} = req.params;
+  const filepath = `images/messages/${userFrom}/${userTo}/${filename}`;
+  fs.readFile(filepath, (err, data) => {
+    if (err) {
+      console.error(err.message);
+      res.status(500).send('Server Error');
+    } else {
+      res.setHeader('Content-Type', 'image/*');
+      res.send(data);
+    }
+  });
+})
+
 app.use('/images/posts', express.static(path.join(__dirname, 'images/posts')));
 app.use('/images/:login', express.static(path.join(__dirname, 'images')));
 
@@ -294,7 +308,7 @@ io.on('connection', (socket) => {
   socket.on('message', (data) => {
     const { message, userFrom, userTo } = data;
     const currentDate = new Date().toISOString();
-    const sql = `INSERT INTO Messages (message, userFrom, userTo, date) VALUES (?, ?, ?, ?)`;
+    const sql = `INSERT INTO Messages (message, userFrom, userTo, date, type) VALUES (?, ?, ?, ?, 'message')`;
     const params = [message, userFrom, userTo, currentDate];
   
     db.run(sql, params, (err) => {
@@ -326,7 +340,34 @@ io.on('connection', (socket) => {
       }
     });
   })
-
+  socket.on("upload", (file, filename, userFrom, userTo, callback) => {
+    console.log(filename, userFrom, userTo);
+    const bufferData = Buffer.from(file, 'binary');
+    const filePath = `images/messages/${userFrom}/${userTo}/${filename}`; 
+    const currentDate = new Date().toISOString();
+    if (!fs.existsSync(`images/messages/${userFrom}/${userTo}`)){
+        fs.mkdirSync(`images/messages/${userFrom}/${userTo}`, { recursive: true });
+    }
+    fs.writeFile(filePath, bufferData, 'binary', (err) => {
+      if (err) {
+        console.error('Error writing the file:', err);
+      } else {
+        console.log('File saved successfully!');
+      }
+    });
+    const sql = `INSERT INTO Messages (message, userFrom, userTo, date, type) VALUES (?, ?, ?, ?, 'file')`;
+    const params = [filename, userFrom, userTo, currentDate];
+  
+    db.run(sql, params, (err) => {
+      if (err) {
+        console.error("Ошибка при добавлении сообщения:", err);
+      } else {
+        console.log("Сообщение успешно добавлено в базу данных");
+  
+        io.to(userTo).emit('newMessage', { filename, userFrom, userTo, date: currentDate });
+      }
+    })
+  });
 });
 
 io.listen(5500, () => {
