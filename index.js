@@ -30,16 +30,13 @@ const db = new Pool({
   port: 5432,
 });
 
-const createUser = (login, password, name, surname, description) => {
-  
-};
 const app = express()
 
 app.use(bodyParser.json());
 app.use(
     express.urlencoded(),
     cors({
-        origin: 'http://localhost:3000'
+        origin: ['http://localhost:3000', 'http://localhost:8014']
     })
 )
 
@@ -58,6 +55,15 @@ app.post('/registration', (req, res) => {
         console.log(`User saved to database`);
       }
     });
+})
+
+app.get('/get-user/:id', (req, res) => {
+  const { id } = req.params
+  const query = 'SELECT * FROM users WHERE id = $1'
+  db.query(query, [id], (err, result) => {
+    if(err) res.status(500)
+    else res.status(200).json(result.rows[0])
+  })
 })
 
 app.get('/getChats/:user', (req, res) => {
@@ -221,8 +227,6 @@ app.get('/getPhoto/:login', (req, res) => {
     if (err) {
       console.error(err.message);
       res.status(500).send('Server Error');
-    } else if (result.rows.length === 0) {
-      res.status(404).send('Photo not found');
     } else {
       res.send(result.rows);
     }
@@ -277,9 +281,7 @@ app.get('/getMessages/:userFrom/:userTo', (req, res) => {
     if (err) {
       console.error('Error:', err);
       res.status(500).send('Server Error');
-    } else if (result.rows.length === 0) {
-      res.status(404).send('Messages not found');
-    } else {
+    }else {
       res.json(result.rows);
     }
   });
@@ -309,7 +311,7 @@ app.get('/getPosts', (req, res) => {
     if (err) {
       console.error(err);
       res.status(500).send('Server Error');
-    } else if (result.rows.length === 0) {
+    } else if (result.rows?.length === 0) {
       res.status(404).send('Posts not found');
     } else {
       res.status(200).json(result.rows);
@@ -354,136 +356,120 @@ app.get('/getPosts/:login', (req, res) => {
 });
 
 
-app.put('/like', (req, res) => {
-  const { id, login } = req.body;
+// app.put('/like', (req, res) => {
+//   const { id, login } = req.body;
 
-  db.query(`SELECT "like" FROM posts WHERE ID = $1`, [id], (err, result) => {
-    if (err) {
-      console.error(err);
-      res.status(500).send('Ошибка при получении записи из базы данных');
-    } else {
-      let currentLikes = result.rows[0].like;
-      const elementToDelete = login
-      const newArray = currentLikes?.filter(item => item !== elementToDelete && item != '');
-      newArray.push(login); 
-      const arrayLenght = newArray.length;
-      console.log(arrayLenght)
-      db.query('UPDATE posts SET "like" = $1 WHERE ID = $2', [newArray, id], (err, updateResult) => {
-        if (err) {
-          console.error(err);
-          res.status(500).send('Ошибка при обновлении записи в базе данных');
-        } else {
-          res.json({'users': newArray, 'count': arrayLenght});
-        }
-      });
-    }
-  });
-});
+//   db.query(`SELECT "like" FROM posts WHERE ID = $1`, [id], (err, result) => {
+//     if (err) {
+//       console.error(err);
+//       res.status(500).send('Ошибка при получении записи из базы данных');
+//     } else {
+//       let currentLikes = result.rows[0]?.like;
+//       const elementToDelete = login
+//       const newArray = currentLikes?.filter(item => item !== elementToDelete && item != '');
+//       newArray.push(login); 
+//       const arrayLenght = newArray.length;
+//       console.log(arrayLenght)
+//       db.query('UPDATE posts SET "like" = $1 WHERE ID = $2', [newArray, id], (err, updateResult) => {
+//         if (err) {
+//           console.error(err);
+//           res.status(500).send('Ошибка при обновлении записи в базе данных');
+//         } else {
+//           res.json({'users': newArray, 'count': arrayLenght});
+//         }
+//       });
+//     }
+//     });
+//   });
 
-app.put('/unlike', (req, res) => {
-  const { id, login } = req.body;
+// app.put('/unlike', (req, res) => {
+//   const { id, login } = req.body;
 
-  db.query(`SELECT "like" FROM posts WHERE ID = $1`, [id], (err, result) => {
-    if (err) {
-      console.error(err);
-      res.status(500).send('Ошибка при получении записи из базы данных');
-    } else {
-      let currentLikes = result.rows[0].like;
-      const elementToDelete = login
-      const newArray = currentLikes?.filter(item => item !== elementToDelete && item != '');
-      console.log(currentLikes)
-      console.log(newArray)
-      const arrayLenght = newArray.length;
-      db.query('UPDATE posts SET "like" = $1 WHERE ID = $2', [newArray, id], (err, updateResult) => {
-        if (err) {
-          console.error(err);
-          res.status(500).send('Ошибка при обновлении записи в базе данных');
-        } else {
-          res.json({'users': newArray, 'count': arrayLenght});
-        }
-      });
-    }
-  });
-});
+//   db.query(`SELECT "like" FROM posts WHERE ID = $1`, [id], (err, result) => {
+//     if (err) {
+//       console.error(err);
+//       res.status(500).send('Ошибка при получении записи из базы данных');
+//     } else {
+//       let currentLikes = result.rows[0].like;
+//       const elementToDelete = login
+//       const newArray = currentLikes?.filter(item => item !== elementToDelete && item != '');
+//       console.log(currentLikes)
+//       console.log(newArray)
+//       const arrayLenght = newArray.length;
+//       db.query('UPDATE posts SET "like" = $1 WHERE ID = $2', [newArray, id], (err, updateResult) => {
+//         if (err) {
+//           console.error(err);
+//           res.status(500).send('Ошибка при обновлении записи в базе данных');
+//         } else {
+//           res.json({'users': newArray, 'count': arrayLenght});
+//         }
+//       });
+//     }
+//   });
+// });
 
-app.put('/likePhoto', (req, res) => {
-  const { login, likeTo, filename } = req.body;
-  console.log(login, filename)
+// app.put('/likePhoto', (req, res) => {
+//   const { login, likeTo, filename } = req.body;
+//   console.log(login, filename)
 
-  db.query(`SELECT * FROM userphoto WHERE "login" = $1 AND "filename" = $2`, [likeTo, filename], (err, result) => {
-    if (err) {
-      console.error(err);
-      res.status(500).send('Ошибка при получении записи из базы данных');
-    } else {
-      let currentLikes = result.rows[0]?.like;
-      const elementToDelete = login
-      const newArray = currentLikes?.filter(item => item !== elementToDelete && item != '');
-      newArray?.push(login);
-      const arrayLenght = newArray?.length;
-      console.log(arrayLenght)
-      db.query('UPDATE userphoto SET "like" = $1 WHERE "login" = $2 AND "filename" = $3', [newArray, likeTo, filename], (err, updateResult) => {
-        if (err) {
-          console.error(err);
-          res.status(500).send('Ошибка при обновлении записи в базе данных');
-        } else {
-          res.json({'users': newArray, 'count': arrayLenght});
-        }
-      });
-    }
-  });
-});
+//   db.query(`SELECT * FROM userphoto WHERE "login" = $1 AND "filename" = $2`, [likeTo, filename], (err, result) => {
+//     if (err) {
+//       console.error(err);
+//       res.status(500).send('Ошибка при получении записи из базы данных');
+//     } else {
+//       let currentLikes = result.rows[0]?.like;
+//       const elementToDelete = login
+//       const newArray = currentLikes?.filter(item => item !== elementToDelete && item != '');
+//       newArray?.push(login);
+//       const arrayLenght = newArray?.length;
+//       console.log(arrayLenght)
+//       db.query('UPDATE userphoto SET "like" = $1 WHERE "login" = $2 AND "filename" = $3', [newArray, likeTo, filename], (err, updateResult) => {
+//         if (err) {
+//           console.error(err);
+//           res.status(500).send('Ошибка при обновлении записи в базе данных');
+//         } else {
+//           res.json({'users': newArray, 'count': arrayLenght});
+//         }
+//       });
+//     }
+//   });
+// });
 
 app.put('/dislikePhoto', (req, res) => {
-  const { id, login } = req.body;
-
-  db.query(`SELECT "like" FROM userphoto WHERE ID = $1`, [id], (err, result) => {
+  db.query(`UPDATE userphoto SET "like" = array_remove("like", $1) WHERE ID = $2 RETURNING "like"`, [login, id], (err, result) => {
     if (err) {
       console.error(err);
-      res.status(500).send('Ошибка при получении записи из базы данных');
+      res.status(500).send('Ошибка при обновлении записи в базе данных');
     } else {
-      let currentLikes = result.rows[0].like;
-      const elementToDelete = login
-      const newArray = currentLikes?.filter(item => item !== elementToDelete && item != '');
-      console.log(currentLikes)
-      console.log(newArray)
-      const arrayLenght = newArray.length;
-      db.query('UPDATE userphoto SET "like" = $1 WHERE ID = $2', [newArray, id], (err, updateResult) => {
-        if (err) {
-          console.error(err);
-          res.status(500).send('Ошибка при обновлении записи в базе данных');
-        } else {
-          res.json({'users': newArray, 'count': arrayLenght});
-        }
-      });
+      const newArray = result.rows[0].like;
+      const arrayLength = newArray.length;
+      res.json({'users': newArray, 'count': arrayLength});
     }
   });
 });
 
 app.put('/commentPhoto', (req, res) => {
   const { login, filename, name, surname, date, message } = req.body;
-  console.log(login, filename)
 
-  db.query(`SELECT * FROM userphoto WHERE "login" = $1 AND "filename" = $2`, [login, filename], (err, result) => {
-    if (err) {
-      console.error(err);
-      res.status(500).send('Ошибка при получении записи из базы данных');
-    } else {
-      let currentLikes = result.rows[0].comments;
-      const newArray = currentLikes.filter(item => item !== '')
-      console.log(newArray)
-      newArray.push({name, surname, message, date, login}); 
-      const arrayLenght = newArray.length;
-      db.query('UPDATE userphoto SET "comments" = $1 WHERE "login" = $2 AND "filename" = $3', [newArray, login, filename], (err, updateResult) => {
-        if (err) {
-          console.error(err);
-          res.status(500).send('Ошибка при обновлении записи в базе данных');
-        } else {
-          res.json({'comments': newArray, 'count': arrayLenght});
-        }
-      });
+  db.query(
+    `UPDATE userphoto 
+     SET "comments" = array_remove(coalesce("comments", ARRAY[]::jsonb[]), '') || $1 
+     WHERE "login" = $2 AND "filename" = $3
+     RETURNING "comments"`,
+    [[{ name, surname, message, date, login }], login, filename],
+    (err, result) => {
+      if (err) {
+        console.error(err);
+        res.status(500).send('Ошибка при обновлении записи в базе данных');
+      } else {
+        const updatedComments = result.rows[0].comments;
+        const count = updatedComments.length;
+        res.json({ comments: updatedComments, count });
+      }
     }
-  });
+  );
 });
+
 
 
 //_____________WebSocket_________________
@@ -512,16 +498,33 @@ io.on('connection', (socket) => {
         console.log("Сообщение успешно добавлено в базу данных");
 
         io.to(userTo).emit('newMessage', { message, userFrom, userTo, date: currentDate });
+        io.to(userFrom).emit('newMessage', { message, userFrom, userTo, date: currentDate });
       }
     });
 
   });
   socket.on('connectToChat', (room) => {
     socket.join(room); 
-    console.log('user ' + room)
+    db.query('UPDATE users SET status = $1 WHERE login = $2', ['online', room], (err, result) => {
+      if (err) {
+        console.error('Error updating status:', err);
+      } else {
+        io.to(room).emit('online')
+      }
+    });
     io.to(room).emit('connectToChat', room);
   });
 
+  socket.on('disconnectUser', (room) => {
+    db.query('UPDATE users SET status = $1 WHERE login = $2', ['offline', room], (err, result) => {
+      if (err) {
+        console.error('Error updating status:', err);
+      } else {
+        io.to(room).emit('online')
+      }
+    });
+    io.to(room).emit('disconnectUser', room);
+  })
   socket.on('inChat', (data)=>{
     const { userFrom, userTo } = data;
     const sql = `
@@ -540,8 +543,53 @@ io.on('connection', (socket) => {
     });
     
   })
+  socket.on('likePost', ({id, login}) => {
+    db.query(`UPDATE posts SET "like" = array_append("like", $1) WHERE ID = $2 RETURNING "like"`, [login, id], (err, result) => {
+      if (err) {
+        console.error(err);
+      } else {
+        const newArray = result.rows[0].like;
+        const arrayLength = newArray.length;
+        io.to(socket.id).emit('newLike');
+      }
+    });
+  });
+  
+  socket.on('dislikePost', ({id, login}) => {
+    db.query(`UPDATE posts SET "like" = array_remove("like", $1) WHERE ID = $2 RETURNING "like"`, [login, id], (err, result) => {
+      if (err) {
+        console.error(err);
+      } else {
+        const newArray = result.rows[0].like;
+        const arrayLength = newArray.length;
+        io.to(socket.id).emit('newLike');
+      }
+    });
+  });
+  
+  socket.on('likePhoto', ({login, likeTo, filename}) => {
+    db.query(`UPDATE userphoto SET "like" = array_append("like", $1) WHERE "login" = $2 AND "filename" = $3 RETURNING "like"`, [login, likeTo, filename], (err, result) => {
+      if (err) {
+        console.error(err);
+      } else {
+        const newArray = result.rows[0].like;
+        const arrayLength = newArray.length;
+        message = `Пользователю ${login} понравилось ваше фото`
+        io.to(likeTo).emit('newLike', {login, message});
+      }
+    });
+  })
+  socket.on('dislikePhoto', ({id, login}) => {
+    db.query(`UPDATE userphoto SET "like" = array_remove("like", $1) WHERE ID = $2 RETURNING "like"`, [login, id], (err, result) => {
+      if (err) {
+        console.error(err);
+      } else {
+        const newArray = result.rows[0].like;
+        const arrayLength = newArray.length;
+      }
+    });
+  })
   socket.on("upload", (file, filename, userFrom, userTo, callback) => {
-    console.log(filename, userFrom, userTo);
     const bufferData = Buffer.from(file, 'binary');
     const filePath = `images/messages/${userFrom}/${userTo}/${filename}`; 
     const currentDate = new Date().toISOString();
@@ -569,6 +617,7 @@ io.on('connection', (socket) => {
 
         const newMessage = { filename, userFrom, userTo, date: currentDate };
         io.to(userTo).emit('newMessage', newMessage);
+        io.to(userFrom).emit('newMessage', newMessage);
       }
     });
 
@@ -608,6 +657,116 @@ app.post('/setOffline/:login', (req, res) => {
   });
 });
 
+//______________________________________________
+
+//___________________SCRUM DESK_________________
+
+app.get('/get-all-projects/:login', (req, res) => {
+  const { login } = req.params
+  const query = 'SELECT projects.*, users.login FROM projects JOIN users ON projects.creator = users.login WHERE users.login = $1 OR $1 = ANY(projects.users);'
+  db.query(query, [login], (err, result) => {
+    if (err) {
+      console.error('Error updating status:', err);
+      res.status(500).json({ error: 'Server Error' });
+    } else {
+      res.status(200).json(result.rows);
+    }
+  })
+})
+
+app.get('/get-project-by-id/:id', (req, res) => {
+  const { id } = req.params
+  const query = 'SELECT * FROM projects WHERE id = $1'
+  db.query(query, [id], (err, result) => {
+    if (err) {
+      console.error('Error updating status:', err);
+      res.status(500).json({ error: 'Server Error' });
+    } else {
+      res.status(200).json(result.rows[0]);
+    }
+  })
+})
+
+app.post('/create-project', (req, res) => {
+  const { name, description, typeProject, usersProject, username, peoples_count } = req.body
+  const query = 'INSERT INTO projects(name, type, description, peoples_count, creator, users) VALUES ($1, $2, $3, $4, $5, $6)'
+  db.query(query, [name, typeProject, description, peoples_count + 1, username, usersProject], (err, result) => {
+    if (err) {
+      console.error('Error updating status:', err);
+      res.status(500).json({ error: 'Server Error' });
+    } else {
+      res.status(200).json({ message: 'Project created successfully' });
+    }
+  })
+})
+
+app.get('/get-tasks/:id', (req, res) => {
+  const { id } = req.params
+  const query = 'SELECT * FROM tasks WHERE project_id = $1'
+  db.query(query, [id], (err, result) => {
+    if (err) {
+      console.error('Error updating status:', err);
+      res.status(500).json({ error: 'Server Error' });
+    } else {
+      res.status(200).json(result.rows);
+    }
+  })
+})
+
+// set-complited
+// set-postponed
+// set-inWork
+
+app.put('/set-complited/:id', (req, res) => {
+  const { id } = req.params
+  const query = `UPDATE tasks SET status = 'completed' WHERE id = ${id}`
+  db.query(query, (err, result) => {
+    if (err) {
+      console.error('Error updating status:', err);
+      res.status(500).json({ error: 'Server Error' });
+    } else {
+      res.status(200)
+    }
+  })
+})
+app.put('/set-postponed/:id', (req, res) => {
+  const { id } = req.params
+  const query = `UPDATE tasks SET status = 'postponed' WHERE id = ${id}`
+  db.query(query, (err, result) => {
+    if (err) {
+      console.error('Error updating status:', err);
+      res.status(500).json({ error: 'Server Error' });
+    } else {
+      res.status(200)
+    }
+  })
+})
+app.put('/set-inWork/:id', (req, res) => {
+  const { id } = req.params
+  const query = `UPDATE tasks SET status = 'inWork' WHERE id = ${id}`
+  db.query(query, (err, result) => {
+    if (err) {
+      console.error('Error updating status:', err);
+      res.status(500).json({ error: 'Server Error' });
+    } else {
+      res.status(200)
+    }
+  })
+})
+
+app.delete('/remove-task')
+app.put('/update-executor/:id/:user_id', (req, res) => {
+  const { id, user_id } = req.params
+  const query = `UPDATE tasks SET executor_id = ${user_id} WHERE id = ${id}`
+  db.query(query, (err, result) => {
+    if (err) {
+      console.error('Error updating status:', err);
+      res.status(500).json({ error: 'Server Error' });
+    } else {
+      res.status(200)
+    }
+  })
+})
 
 //______________________________________________
 
