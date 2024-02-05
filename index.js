@@ -45,16 +45,27 @@ app.post('/registration', (req, res) => {
     const body = req.body
     const query = `INSERT INTO users (login, password, username, surname, description) VALUES ($1, $2, $3, $4, $5)`;
     const values = [body.login, body.password, body.name, body.surname, body.description];
-
-    db.query(query, values, (err, result) => { 
-      if (err) {
-        console.error(err);
-        console.log('Error saving user to database');
-      } else {
-        res.status(200).send('OK')
-        console.log(`User saved to database`);
+    let check
+    db.query(`SELECT login FROM users WHERE login = $1`, [body.login], (err, result) =>{
+      if(err){
+        res.status(404).send('Ошибка!')
       }
-    });
+      else if( result.rows[0] ){
+        res.status(404).send('Пользователь уже существует!')
+      } else {
+        db.query(query, values, (err, result) => { 
+          if (err) {
+            console.error(err);
+            console.log('Error saving user to database');
+          } else {
+            res.status(200).send('OK')
+            console.log(`User saved to database`);
+          }
+        });
+      }
+    })
+
+
 })
 
 app.get('/get-user/:id', (req, res) => {
@@ -91,7 +102,7 @@ app.get('/getChats/:user', (req, res) => {
 
 app.get('/user/:username', (req, res) => {
   const { username } = req.params;
-  const query = 'SELECT * FROM users WHERE login = $1';
+  const query = 'SELECT login, username, surname, description, status FROM users WHERE login = $1';
 
   db.query(query, [username], (err, result) => {
     if (err) {
@@ -105,13 +116,19 @@ app.get('/user/:username', (req, res) => {
 app.put('/changeName/:login', (req, res) => {
   const { name, surname } = req.body;
   const {login} = req.params;
-
   db.query('UPDATE users SET username = $1, surname = $2 WHERE login = $3', [name, surname, login], (err, updateResult) => {
     if (err) {
       console.error(err);
       res.status(500).send('Ошибка при обновлении записи в базе данных');
     } else {
-      res.status(200).send('Okk');
+      db.query('UPDATE posts SET name = $1, surname = $2 WHERE login = $3', [name, surname, login], (error, updateRes) => {
+        if(updateRes){
+          res.status(200).send('Okk');
+        } else {
+          console.error(error);
+          res.status(500).send('Ошибка при обновлении записи в базе данных');
+        }
+      })
     }
   });
 });
@@ -485,6 +502,7 @@ const io = require("socket.io")({
 
 io.on('connection', (socket) => {
   socket.join()
+  var login = ''
   socket.on('message', (data) => {
     const { message, userFrom, userTo } = data;
     const currentDate = new Date().toISOString();
@@ -514,6 +532,16 @@ io.on('connection', (socket) => {
     });
     io.to(room).emit('connectToChat', room);
   });
+  socket.on('setOnline', (login) => {
+    db.query('UPDATE users SET status = $1 WHERE login = $2', ['online', login], (err, result) => {
+      if (err) {
+        console.error('Error updating status:', err);
+        res.status(500).json({ error: 'Server Error' });
+      } else {
+        io.emit({ message: 'Status updated successfully' });
+      }
+    });
+  })
 
   socket.on('disconnectUser', (room) => {
     db.query('UPDATE users SET status = $1 WHERE login = $2', ['offline', room], (err, result) => {
@@ -622,6 +650,16 @@ io.on('connection', (socket) => {
     });
 
   });
+  socket.on('disconnect', () => {
+    db.query('UPDATE users SET status = $1 WHERE login = $2', ['offline', login], (err, result) => {
+      if (err) {
+        console.error('Error updating status:', err);
+        res.status(500).json({ error: 'Server Error' });
+      } else {
+        io.emit({ message: 'Status updated successfully' });
+      }
+    });
+  });
 });
 
 io.listen(5500, () => {
@@ -633,29 +671,29 @@ io.listen(5500, () => {
 
 
 //__________________Check Online________________
-app.post('/setOnline/:login', (req, res) => {
-  const { login } = req.params;
-  db.query('UPDATE users SET status = $1 WHERE login = $2', ['online', login], (err, result) => {
-    if (err) {
-      console.error('Error updating status:', err);
-      res.status(500).json({ error: 'Server Error' });
-    } else {
-      res.status(200).json({ message: 'Status updated successfully' });
-    }
-  });
-});
+// app.post('/setOnline/:login', (req, res) => {
+//   const { login } = req.params;
+//   db.query('UPDATE users SET status = $1 WHERE login = $2', ['online', login], (err, result) => {
+//     if (err) {
+//       console.error('Error updating status:', err);
+//       res.status(500).json({ error: 'Server Error' });
+//     } else {
+//       res.status(200).json({ message: 'Status updated successfully' });
+//     }
+//   });
+// });
 
-app.post('/setOffline/:login', (req, res) => {
-  const { login } = req.params;
-  db.query('UPDATE users SET status = $1 WHERE login = $2', ['offline', login], (err, result) => {
-    if (err) {
-      console.error('Error updating status:', err);
-      res.status(500).json({ error: 'Server Error' });
-    } else {
-      res.status(200).json({ message: 'Status updated successfully' });
-    }
-  });
-});
+// app.post('/setOffline/:login', (req, res) => {
+//   const { login } = req.params;
+//   db.query('UPDATE users SET status = $1 WHERE login = $2', ['offline', login], (err, result) => {
+//     if (err) {
+//       console.error('Error updating status:', err);
+//       res.status(500).json({ error: 'Server Error' });
+//     } else {
+//       res.status(200).json({ message: 'Status updated successfully' });
+//     }
+//   });
+// });
 
 //______________________________________________
 
