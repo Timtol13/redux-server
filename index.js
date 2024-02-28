@@ -4,7 +4,9 @@ var fs = require('fs')
 const path = require('path')
 const multer  = require('multer')
 const { Pool } = require('pg');
-const cors = require('cors')
+const cors = require('cors');
+const http = require('http');
+const { Server } = require('socket.io');
 
 const port = 7653
 
@@ -36,7 +38,7 @@ app.use(bodyParser.json());
 app.use(
     express.urlencoded(),
     cors({
-        origin: ['http://localhost:3000', 'http://localhost:8014']
+        origin: ['http://localhost:3000', 'http://localhost:8014', 'http://localhost:5173']
     })
 )
 
@@ -491,46 +493,74 @@ app.put('/commentPhoto', (req, res) => {
 
 //_____________WebSocket_________________
 
-
-const io = require("socket.io")({
+const server = http.createServer(app);
+const io = new Server(server, {
   cors: {
-    origin: "http://localhost:3000",
-    methods: ["GET", "POST"]
+    origin: "*", 
+    methods: ["GET", "POST"], 
+    allowedHeaders: ["my-custom-header"], 
+    credentials: true 
   }
 });
 
 
+// const io = require("socket.io")({
+//   cors: {
+//     origin: "http://localhost:3000",
+//     methods: ["GET", "POST"]
+//   }
+// });
+
 io.on('connection', (socket) => {
-  socket.join()
   var login = ''
   socket.on('message', (data) => {
-    const { message, userFrom, userTo } = data;
-    const currentDate = new Date().toISOString();
+    const { message, userFrom, userTo } = JSON.parse(data).content;
+    const currentDate = new Date();
     const sql = `INSERT INTO message (message, userFrom, userTo, date, type) VALUES ($1, $2, $3, $4, 'message')`;
     const values = [message, userFrom, userTo, currentDate];
-
+    // console.log(socket.adapter.rooms)
+  
     db.query(sql, values, (err, result) => {
       if (err) {
         console.error("Ошибка при добавлении сообщения:", err);
       } else {
         console.log("Сообщение успешно добавлено в базу данных");
-
-        io.to(userTo).emit('newMessage', { message, userFrom, userTo, date: currentDate });
-        io.to(userFrom).emit('newMessage', { message, userFrom, userTo, date: currentDate });
+        return io.emit('newMessage', { message, userFrom, userTo, date: currentDate });
+        // console.log(socket.to(userFrom).emit('newMessage', { message, userFrom, userTo, date: currentDate }));
+        // console.log(socket.to(userTo).emit('newMessage', { message, userFrom, userTo, date: currentDate }));
       }
     });
-
   });
+  socket.on('commentPhoto', (data) => {
+    const { login, filename, name, surname, date, message } = data;
+    db.query(
+      `UPDATE userphoto 
+      SET "comments" = array_remove(coalesce("comments", ARRAY[]::varchar[]), '') || $1 
+      WHERE "login" = $2 AND "filename" = $3
+      RETURNING "comments"`,
+      [[{ name, surname, message, date, login }], login, filename],
+      (err, result) => {
+        if (err) {
+          console.error(err);
+          socket.emit('Ошибка при обновлении записи в базе данных');
+        } else {
+          const updatedComments = result.rows[0]?.comments;
+          const count = updatedComments?.length;
+          socket.emit('getComments', { comments: updatedComments, count })
+        }
+      }
+    );
+  })
   socket.on('connectToChat', (room) => {
-    socket.join(room); 
+    socket.join(room?.login); 
     db.query('UPDATE users SET status = $1 WHERE login = $2', ['online', room], (err, result) => {
       if (err) {
         console.error('Error updating status:', err);
       } else {
-        io.to(room).emit('online')
+        socket.to(room).emit('online')
       }
     });
-    io.to(room).emit('connectToChat', room);
+    socket.to(room).emit('connectToChat', room);
   });
   socket.on('setOnline', (login) => {
     db.query('UPDATE users SET status = $1 WHERE login = $2', ['online', login], (err, result) => {
@@ -548,10 +578,10 @@ io.on('connection', (socket) => {
       if (err) {
         console.error('Error updating status:', err);
       } else {
-        io.to(room).emit('online')
+        socket.to(room).emit('online')
       }
     });
-    io.to(room).emit('disconnectUser', room);
+    socket.to(room).emit('disconnectUser', room);
   })
   socket.on('inChat', (data)=>{
     const { userFrom, userTo } = data;
@@ -566,7 +596,7 @@ io.on('connection', (socket) => {
       if (err) {
         console.error('Ошибка при получении сообщений:', err.message);
       } else {
-        io.to(socket.id).emit('inChat', result);
+        socket.to(socket.id).emit('inChat', result);
       }
     });
     
@@ -578,7 +608,7 @@ io.on('connection', (socket) => {
       } else {
         const newArray = result.rows[0].like;
         const arrayLength = newArray.length;
-        io.to(socket.id).emit('newLike');
+        socket.to(socket.id).emit('newLike');
       }
     });
   });
@@ -590,22 +620,41 @@ io.on('connection', (socket) => {
       } else {
         const newArray = result.rows[0].like;
         const arrayLength = newArray.length;
-        io.to(socket.id).emit('newLike');
+        socket.to(socket.id).emit('newLike');
       }
     });
   });
   
   socket.on('likePhoto', ({login, likeTo, filename}) => {
-    db.query(`UPDATE userphoto SET "like" = array_append("like", $1) WHERE "login" = $2 AND "filename" = $3 RETURNING "like"`, [login, likeTo, filename], (err, result) => {
-      if (err) {
-        console.error(err);
-      } else {
-        const newArray = result.rows[0].like;
-        const arrayLength = newArray.length;
-        message = `Пользователю ${login} понравилось ваше фото`
-        io.to(likeTo).emit('newLike', {login, message});
+    console.log({login, likeTo, filename});
+    db.query(
+      `SELECT "like" FROM userphoto WHERE "login" = $1 AND "filename" = $2`,
+      [likeTo, filename],
+      (selectErr, selectResult) => {
+          if (selectErr) {
+              console.error(selectErr + 'qwe');
+          } else {
+              const currentLikes = selectResult.rows[0]?.like || [];
+
+              const updatedLikes = [...currentLikes, login];
+              const updatedRow = updatedLikes;
+              const arrayLength = updatedLikes.length || 0;
+              message = `Пользователю ${login} понравилось ваше фото`;
+              socket.to(likeTo).emit('newLike', { login, message, arrayLength });
+              db.query(
+                  `UPDATE userphoto SET "like" = $1 WHERE "login" = $2 AND "filename" = $3 RETURNING *`,
+                  [updatedLikes, likeTo, filename],
+                  (updateErr, updateResult) => {
+                      if (updateErr) {
+                          console.error(updateErr);
+                      } else {
+                          console.log('OK')
+                      }
+                  }
+              );
+          }
       }
-    });
+    );
   })
   socket.on('dislikePhoto', ({id, login}) => {
     db.query(`UPDATE userphoto SET "like" = array_remove("like", $1) WHERE ID = $2 RETURNING "like"`, [login, id], (err, result) => {
@@ -644,26 +693,21 @@ io.on('connection', (socket) => {
         console.log("Сообщение успешно добавлено в базу данных");
 
         const newMessage = { filename, userFrom, userTo, date: currentDate };
-        io.to(userTo).emit('newMessage', newMessage);
-        io.to(userFrom).emit('newMessage', newMessage);
+        return io.emit('newMessage', newMessage);
       }
     });
 
   });
-  socket.on('disconnect', () => {
-    db.query('UPDATE users SET status = $1 WHERE login = $2', ['offline', login], (err, result) => {
-      if (err) {
-        console.error('Error updating status:', err);
-        res.status(500).json({ error: 'Server Error' });
-      } else {
-        io.emit({ message: 'Status updated successfully' });
-      }
-    });
-  });
-});
-
-io.listen(5500, () => {
-  console.log('Server listening on port 5500');
+  // socket.on('disconnect', () => {
+  //   db.query('UPDATE users SET status = $1 WHERE login = $2', ['offline', login], (err, result) => {
+  //     if (err) {
+  //       console.error('Error updating status:', err);
+  //       res.status(500).json({ error: 'Server Error' });
+  //     } else {
+  //       io.emit({ message: 'Status updated successfully' });
+  //     }
+  //   });
+  // });
 });
 
 
@@ -751,9 +795,34 @@ app.get('/get-tasks/:id', (req, res) => {
   })
 })
 
-// set-complited
-// set-postponed
-// set-inWork
+app.post('/create-task', (req,res) => {
+  const {name, description, executor_id, creator, project_id, status} = req.body
+  const query = 'INSERT INTO tasks(name, description, executor_id, creator, project_id, status) VALUES ($1, $2, $3, $4, $5, $6)'
+  db.query(query, [name, description, executor_id, creator, project_id, status], (err, result) => {
+    if(err){
+      console.error(err)
+      res.status(500).send('Something went wrong!')
+    }else {
+      res.status(200).send('OK')
+    }
+  })
+})
+
+app.post('/update-users-list', (req, res) => {
+  const { id, users } = req.body;
+  const usersAsString = users.map(el => JSON.stringify(el));
+  const query = 'UPDATE projects SET users = users || $1 WHERE id = $2';
+  db.query(query, [usersAsString, id], (err, result) => {
+    if(err){
+      console.error(err);
+      res.status(500).send('Something went wrong!');
+    }else {
+      res.status(200).send('OK');
+    }
+  });
+});
+
+
 
 app.put('/set-complited/:id', (req, res) => {
   const { id } = req.params
@@ -792,7 +861,18 @@ app.put('/set-inWork/:id', (req, res) => {
   })
 })
 
-app.delete('/remove-task')
+app.delete('/remove-task/:id', (req, res) => {
+  const { id } = req.params
+  const query = 'DELETE FROM tasks WHERE id = $1'
+  db.query(query, [id], (err, result) => {
+    if (err) {
+      console.error('Error updating status:', err);
+      res.status(500).json({ error: 'Server Error' });
+    } else {
+      res.status(200)
+    }
+  })
+})
 app.put('/update-executor/:id/:user_id', (req, res) => {
   const { id, user_id } = req.params
   const query = `UPDATE tasks SET executor_id = ${user_id} WHERE id = ${id}`
@@ -808,4 +888,6 @@ app.put('/update-executor/:id/:user_id', (req, res) => {
 
 //______________________________________________
 
-app.listen(port, () => console.log(`Listening on port ${port}!`))
+server.listen(port, () => {
+  console.log(`Listening on port ${port}!`); 
+})
