@@ -608,7 +608,7 @@ io.on('connection', (socket) => {
       } else {
         const newArray = result.rows[0].like;
         const arrayLength = newArray.length;
-        socket.to(socket.id).emit('newLike');
+        socket.emit('newLike');
       }
     });
   });
@@ -620,13 +620,12 @@ io.on('connection', (socket) => {
       } else {
         const newArray = result.rows[0].like;
         const arrayLength = newArray.length;
-        socket.to(socket.id).emit('newLike');
+        socket.emit('newLike');
       }
     });
   });
   
   socket.on('likePhoto', ({login, likeTo, filename}) => {
-    console.log({login, likeTo, filename});
     db.query(
       `SELECT "like" FROM userphoto WHERE "login" = $1 AND "filename" = $2`,
       [likeTo, filename],
@@ -641,6 +640,7 @@ io.on('connection', (socket) => {
               const arrayLength = updatedLikes.length || 0;
               message = `Пользователю ${login} понравилось ваше фото`;
               socket.to(likeTo).emit('newLike', { login, message, arrayLength });
+              console.log()
               db.query(
                   `UPDATE userphoto SET "like" = $1 WHERE "login" = $2 AND "filename" = $3 RETURNING *`,
                   [updatedLikes, likeTo, filename],
